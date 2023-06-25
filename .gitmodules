@@ -1,0 +1,6 @@
+[submodule "JUCE"]
+	path = JUCE
+	url = https://github.com/juce-framework/JUCE.git
+[submodule "SC_Utilities"]
+	path = SC_Utilities
+	url = https://github.com/SpiceChateauDSP/SC_Utilities.git
