@@ -29,7 +29,8 @@ private:
     // access the processor object that created it.
     RingWormAudioProcessor& audioProcessor;
     
-    juce::Slider depth_slider, rate_slider;
+    juce::Slider hi_l_depth_slider, hi_r_depth_slider, lo_l_depth_slider, lo_r_depth_slider;
+    juce::Slider hi_l_rate_slider, hi_r_rate_slider, lo_l_rate_slider, lo_r_rate_slider;
     
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAttachments;
 

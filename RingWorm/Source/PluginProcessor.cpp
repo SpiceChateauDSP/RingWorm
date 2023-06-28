@@ -31,11 +31,18 @@ RingWormAudioProcessor::~RingWormAudioProcessor()
 juce::AudioProcessorValueTreeState::ParameterLayout RingWormAudioProcessor::createParameterLayout(){
     std::vector <std::unique_ptr <juce::RangedAudioParameter>> parameters;
     
-    juce::NormalisableRange<float> rateRange (0.f, 20.f, 0.01f);
-    juce::NormalisableRange<float> depthRange (-48.f, 0.f, 0.01f);
+    juce::NormalisableRange<float> rateRange (0.f, 10.f, 0.01f);
+    juce::NormalisableRange<float> depthRange (-36.f, 0.f, 0.1f);
     
-    parameters.push_back(std::make_unique<juce::AudioParameterFloat> (juce::ParameterID {"TEST_RATE", 1}, "Rate", rateRange, 0.f));
-    parameters.push_back(std::make_unique<juce::AudioParameterFloat> (juce::ParameterID {"TEST_DEPTH", 1}, "Depth", depthRange, 0.f));
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat> (juce::ParameterID {"HI_L_RATE", 1}, "Hi L Rate", rateRange, 0.f));
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat> (juce::ParameterID {"HI_R_RATE", 1}, "Hi R Rate", rateRange, 0.f));
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat> (juce::ParameterID {"LO_L_RATE", 1}, "Lo L Rate", rateRange, 0.f));
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat> (juce::ParameterID {"LO_R_RATE", 1}, "LO R Rate", rateRange, 0.f));
+    
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat> (juce::ParameterID {"HI_L_DEPTH", 1}, "Hi L Depth", depthRange, 0.f));
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat> (juce::ParameterID {"HI_R_DEPTH", 1}, "Hi R Depth", depthRange, 0.f));
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat> (juce::ParameterID {"LO_L_DEPTH", 1}, "Lo L Depth", depthRange, 0.f));
+    parameters.push_back(std::make_unique<juce::AudioParameterFloat> (juce::ParameterID {"LO_R_DEPTH", 1}, "Lo R Depth", depthRange, 0.f));
     
     return { parameters.begin(), parameters.end() };
 }
@@ -106,13 +113,19 @@ void RingWormAudioProcessor::changeProgramName (int index, const juce::String& n
 void RingWormAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     crossover.prepare (sampleRate);
-    lfo_test.prepare (sampleRate);
+    hi_lfo_l.prepare (sampleRate);
+    hi_lfo_r.prepare (sampleRate);
+    lo_lfo_l.prepare (sampleRate);
+    lo_lfo_r.prepare (sampleRate);
 }
 
 void RingWormAudioProcessor::releaseResources()
 {
     crossover.reset();
-    lfo_test.reset();
+    hi_lfo_l.reset();
+    hi_lfo_r.reset();
+    lo_lfo_l.reset();
+    lo_lfo_r.reset();
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -150,11 +163,29 @@ void RingWormAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
     
-    auto newRate = apvts.getRawParameterValue ("TEST_RATE");
-    lfo_test.setRate (*newRate);
+    auto newRate = apvts.getRawParameterValue ("HI_L_RATE");
+    hi_lfo_l.setRate (*newRate);
     
-    auto newDepth = apvts.getRawParameterValue ("TEST_DEPTH");
-    lfo_test.setDepth (*newDepth);
+    newRate = apvts.getRawParameterValue ("HI_R_RATE");
+    hi_lfo_r.setRate (*newRate);
+    
+    newRate = apvts.getRawParameterValue ("LO_L_RATE");
+    lo_lfo_l.setRate (*newRate);
+    
+    newRate = apvts.getRawParameterValue ("LO_R_RATE");
+    lo_lfo_r.setRate (*newRate);
+    
+    auto newDepth = apvts.getRawParameterValue ("HI_L_DEPTH");
+    hi_lfo_l.setDepth (*newDepth);
+    
+    newDepth = apvts.getRawParameterValue ("HI_R_DEPTH");
+    hi_lfo_r.setDepth (*newDepth);
+    
+    newDepth = apvts.getRawParameterValue ("LO_L_DEPTH");
+    lo_lfo_l.setDepth (*newDepth);
+    
+    newDepth = apvts.getRawParameterValue ("LO_R_DEPTH");
+    lo_lfo_r.setDepth (*newDepth);
     
     /* Process */
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
@@ -169,12 +200,28 @@ void RingWormAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
             auto lo_out = crossover.process_low (input, channel);
             
             /* LFO */
-            auto lfo_out_dB = lfo_test.getCurrentLFOPosition (channel);
-            auto lfo_out_0to1 = juce::Decibels::decibelsToGain (lfo_out_dB);
+            double hi_lfo_out_dB, lo_lfo_out_dB;
+            double hi_lfo_out_0to1, lo_lfo_out_0to1;
             
-            /* Apply Trem */
+            if (channel == 0) {
+                hi_lfo_out_dB = hi_lfo_l.getCurrentLFOPosition (0);
+                hi_lfo_out_0to1 = juce::Decibels::decibelsToGain (hi_lfo_out_dB);
+                lo_lfo_out_dB = lo_lfo_l.getCurrentLFOPosition (0);
+                lo_lfo_out_0to1 = juce::Decibels::decibelsToGain (lo_lfo_out_dB);
+                
+                hi_out *= hi_lfo_out_0to1;
+                lo_out *= lo_lfo_out_0to1;
+            } else {
+                hi_lfo_out_dB = hi_lfo_r.getCurrentLFOPosition (1);
+                hi_lfo_out_0to1 = juce::Decibels::decibelsToGain (hi_lfo_out_dB);
+                lo_lfo_out_dB = lo_lfo_r.getCurrentLFOPosition (1);
+                lo_lfo_out_0to1 = juce::Decibels::decibelsToGain (lo_lfo_out_dB);
+                
+                hi_out *= hi_lfo_out_0to1;
+                lo_out *= lo_lfo_out_0to1;
+            }
+            
             auto channel_out = hi_out + lo_out;
-            channel_out *= lfo_out_0to1;
             
             channelData[sample] = channel_out;
         }

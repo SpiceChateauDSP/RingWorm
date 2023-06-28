@@ -67,7 +67,7 @@ private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     
     SK_Crossover crossover;
-    LFO lfo_test;
+    LFO hi_lfo_l, hi_lfo_r, lo_lfo_l, lo_lfo_r;
     
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RingWormAudioProcessor)
